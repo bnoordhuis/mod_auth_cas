@@ -1690,7 +1690,8 @@ static int cas_authenticate(request_rec *r)
 	apr_byte_t parametersRemoved = FALSE;
 	apr_port_t port = r->connection->local_addr->port;
 	apr_byte_t printPort = FALSE;
-	
+	int gatewayEnabled;
+
 	char *newLocation = NULL;
 
 	/* Do nothing if we are not the authenticator */
@@ -1748,13 +1749,14 @@ static int cas_authenticate(request_rec *r)
 	/* the presence of a ticket overrides all */
 	ticket = getCASTicket(r);
 	cookieString = getCASCookie(r, (ssl ? d->CASSecureCookie : d->CASCookie));
-	
+	gatewayEnabled = d->CASGateway != NULL && strncmp(d->CASGateway, r->parsed_uri.path, strlen(d->CASGateway)) == 0;
+
 	// only remove parameters if a ticket was found (makes no sense to do this otherwise)
 	if(ticket != NULL)
 		parametersRemoved = removeCASParams(r);
 
 	/* first, handle the gateway case */
-	if(d->CASGateway != NULL && strncmp(d->CASGateway, r->parsed_uri.path, strlen(d->CASGateway)) == 0 && ticket == NULL && cookieString == NULL) {
+	if(gatewayEnabled && ticket == NULL && cookieString == NULL) {
 		cookieString = getCASCookie(r, d->CASGatewayCookie);
 		if(cookieString == NULL) { /* they have not made a gateway trip yet */
 			if(c->CASDebug)
@@ -1868,6 +1870,13 @@ static int cas_authenticate(request_rec *r)
  					}
  				}
  			}
+			return OK;
+		} else if(gatewayEnabled) {
+			/* Handle the edge case where gateway-ing is enabled, the upstream CAS session has expired
+			 * but the client still sends a MOD_AUTH_CAS cookie. If we redirect to the CAS server with
+			 * "service=request_uri&gateway=true", we'd create an infinite loop.
+			 */
+			r->main = NULL;
 			return OK;
 		} else {
 			/* maybe the cookie expired, have the user get a new service ticket */
