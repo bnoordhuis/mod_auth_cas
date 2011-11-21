@@ -9,3 +9,12 @@ config.h
 config.log
 config.status
 tests/mactest
+aclocal.m4
+config.guess
+config.sub
+configure
+ltmain.sh
+libtool
+stamp-h1
+Makefile.in
+config.h.in
